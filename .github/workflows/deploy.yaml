@@ -1,0 +1,46 @@
+name: Build and Deploy
+on:
+  push:
+    branches:
+      - github-pages
+
+jobs:
+  Build-and-Deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Download Experience Builder
+        run: curl -o exb.zip "$(curl -s 'https://downloads.arcgis.com/dms/rest/download/secured/arcgis-experience-builder-1.14.zip?f=json&folder=software%2FExperienceBuilder%2F1.14' | python3 -c "import sys, json; print(json.load(sys.stdin)['url'])")"
+      - name: Unzip Experience Builder
+        run: unzip -q exb.zip -d exb
+      - name: Create App directory
+        run: mkdir public && cd public && mkdir apps && cd apps
+        working-directory: ../storymaps-wells/server
+      - name: NPM install client folder
+        run: npm ci
+        working-directory: ../storymaps-wells/client
+      - name: NPM install in server folder
+        run: npm ci
+        working-directory: ../storymaps-wells/server
+      - name: Build widgets - dev
+        run: npm run build:dev
+        working-directory: ../storymaps-wells/client
+      - name: Build widgets
+        run: npm run build:prod
+        working-directory: ../storymaps-wells/client
+      - name: Run download script
+        run: node -e "require('./server/src/middlewares/dev/apps/app-download.js').zipApp('0', 'app.zip')"
+        working-directory: ../storymaps-wells
+        env:
+          NODE_ENV: production
+      - name: Unzip app zip
+        run: |
+          unzip -q app.zip -d app
+          chmod -R 777 app
+        working-directory: ../storymaps-wells
+      - name: Deploy app zip to GH Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: ../storymaps-wells/app
